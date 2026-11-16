@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: chessmess
+    runtime: python
+    plan: free
+    buildCommand: >-
+      python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      && npm ci --include=dev
+      && npm run build
+      && python -B deploy.py --check
+    startCommand: python -B deploy.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: CHESS_ENV
+        value: production
+

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="เกมหมากรุกและหมากฮอสแบบสองคน ซ่อนคำสั่งใต้หมาก เล่นเครื่องเดียวกันหรือชวนเพื่อนเข้าห้องออนไลน์">
+  <title>หมากซ่อนคำสั่ง</title>
+
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">♞</span>
+        <div><h1>หมากซ่อนคำสั่ง</h1><div class="mode" id="mode-label">เล่นสองคนบนเครื่องเดียว</div></div>
+      </div>
+      <div class="header-actions">
+        <div class="toolbar" id="game-toolbar" hidden>
+          <button type="button" class="ghost" id="menu-button">เมนู</button>
+          <button type="button" class="ghost" id="rules-button">กติกา</button>
+          <button type="button" class="ghost" id="restart-button">เริ่มใหม่</button>
+        </div>
+        <div class="header-preferences">
+          <button type="button" class="ghost theme-trigger" data-open-themes aria-label="เปลี่ยนธีม" aria-haspopup="dialog" aria-controls="theme-dialog"><span class="theme-trigger-swatch" aria-hidden="true"></span>ธีม</button>
+          <div id="profile-controls"></div>
+          <button type="button" class="ghost account-trigger" id="account-trigger" aria-haspopup="dialog" aria-controls="account-dialog">เข้าสู่ระบบ</button>
+        </div>
+      </div>
+    </header>
+    <p id="engine-message" class="engine-error" role="alert" hidden></p>
+    <p id="storage-message" role="status" hidden></p>
+    <div id="online-controls"></div>
+    <main class="menu" id="menu" aria-labelledby="menu-title">
+      <div>
+        <h2 id="menu-title">เลือกโหมดเกม</h2>
+        <p class="menu-intro">ซ่อนคำสั่งใต้หมากของคุณ แล้วล่อให้อีกฝ่ายมากิน</p>
+        <form id="mode-form">
+          <fieldset class="mode-picker" aria-labelledby="menu-title">
+            <label class="mode-card">
+              <input type="radio" name="mode" value="chess" checked aria-labelledby="chess-mode" aria-describedby="chess-mode-description">
+              <strong class="mode-name" id="chess-mode">หมากรุก</strong>
+              <span class="mode-description" id="chess-mode-description">เดินหมากสากล ซ่อนคำสั่ง แล้วหาจังหวะรุกฆาต</span>
+            </label>
+            <label class="mode-card">
+              <input type="radio" name="mode" value="draughts" aria-labelledby="draughts-mode" aria-describedby="draughts-mode-description">
+              <strong class="mode-name" id="draughts-mode">หมากฮอสไทย</strong>
+              <span class="mode-description" id="draughts-mode-description">ฝั่งละ 8 ตัว กระโดดกินต่อเนื่องและเดินขึ้นฮอส</span>
+            </label>
+            <label class="mode-card">
+              <input type="radio" name="mode" value="hybrid" aria-labelledby="hybrid-mode" aria-describedby="hybrid-mode-description">
+              <strong class="mode-name" id="hybrid-mode">Chess vs หมากฮอส</strong>
+              <span class="mode-description" id="hybrid-mode-description">หมากฮอส 12 ตัว ซ่อนสกิลซ้อนและใช้ Tic Tac Toe สวนกิน</span>
+            </label>
+          </fieldset>
+          <div class="menu-actions"><button class="primary play" type="submit">Play</button><button class="ghost" type="button" id="resume-button" hidden>เล่นต่อจากเซฟ</button></div>
+        </form>
+      </div>
+      <figure class="menu-board">
+        <div class="board-wrap"><div class="board" id="menu-preview" aria-hidden="true"></div></div>
+        <figcaption>กระดานเริ่มต้น</figcaption>
+      </figure>
+    </main>
+    <main id="game-view" hidden>
+      <section id="board-section" aria-label="กระดานหมากรุก">
+        <div class="board-header">
+          <strong id="board-caption" aria-live="polite"></strong>
+          <span class="legend" id="skill-legend" hidden><i class="diamond" aria-hidden="true"></i> สกิลของคุณ</span>
+        </div>
+        <div class="board-wrap">
+          <div class="board" id="board" role="group" aria-label="ช่องบนกระดาน"></div>
+          <div class="privacy" id="privacy" hidden>
+            <i class="diamond" aria-hidden="true"></i>
+            <strong>ส่งเครื่องให้ฝ่ายดำ</strong>
+            คำสั่งของฝ่ายขาวถูกซ่อนแล้ว
+          </div>
+        </div>
+      </section>
+      <aside aria-label="คำสั่งและตาเดิน">
+        <div id="sidebar"></div>
+        <section class="panel piece-skills" id="piece-skills" aria-labelledby="piece-skills-title" aria-live="polite" hidden>
+          <h3 id="piece-skills-title"></h3>
+          <div id="piece-skills-content"></div>
+        </section>
+        <section class="panel" id="game-history" aria-labelledby="history-title" hidden></section>
+      </aside>
+    </main>
+  </div>
+  <dialog id="account-dialog" class="account-dialog" aria-labelledby="account-title">
+    <div class="account-heading">
+      <h2 id="account-title">บัญชีผู้เล่น</h2>
+      <form method="dialog"><button class="ghost" id="account-close">ปิด</button></form>
+    </div>
+    <div id="account-guest" hidden>
+      <div class="account-modes" role="group" aria-label="จัดการบัญชี">
+        <button type="button" class="ghost" id="account-show-login" aria-pressed="true">เข้าสู่ระบบ</button>
+        <button type="button" class="ghost" id="account-show-register" aria-pressed="false">สมัครสมาชิก</button>
+        <button type="button" class="ghost" id="account-show-confirm" aria-pressed="false">ยืนยันอีเมล</button>
+      </div>
+      <form id="account-form" method="post" action="./api/account/login" aria-label="ข้อมูลบัญชี">
+        <fieldset class="account-fields" id="account-fields">
+          <div class="account-field" id="account-name-field" hidden>
+            <label for="account-display-name">ชื่อที่แสดง</label>
+            <input id="account-display-name" name="displayName" autocomplete="nickname" maxlength="80" dir="auto" disabled>
+          </div>
+          <div class="account-field">
+            <label for="account-email">อีเมล</label>
+            <input type="email" id="account-email" name="email" autocomplete="username" inputmode="email"
+              autocapitalize="none" spellcheck="false" maxlength="254" required>
+          </div>
+          <div class="account-field" id="account-password-field">
+            <label for="account-password">รหัสผ่าน</label>
+            <input type="password" id="account-password" name="password" autocomplete="current-password" required>
+            <small id="account-password-note" hidden>อย่างน้อย 8 ตัวอักษร</small>
+          </div>
+          <div class="account-field" id="account-code-field" hidden>
+            <label for="account-code">รหัสยืนยันจากอีเมล</label>
+            <input id="account-code" name="code" inputmode="numeric" pattern="[0-9]{6,10}" minlength="6"
+              maxlength="10" autocomplete="one-time-code" aria-describedby="account-code-note" disabled>
+            <small id="account-code-note">กรอกรหัสที่ได้รับทางอีเมล</small>
+          </div>
+          <button type="submit" class="primary" id="account-submit">เข้าสู่ระบบ</button>
+        </fieldset>
+      </form>
+    </div>
+    <div id="account-signed-in" hidden>
+      <p class="account-user-name" id="account-user-name" dir="auto"></p>
+      <p class="account-user-email" id="account-user-email" dir="ltr"></p>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" id="account-logout">ออกจากระบบ</button>
+      </div>
+    </div>
+    <p class="account-status" id="account-status" role="status" aria-atomic="true"></p>
+  </dialog>
+  <dialog id="command-dialog" class="command-dialog" aria-labelledby="command-title" aria-describedby="command-body">
+    <h2 id="command-title"></h2>
+    <div class="command-meta"><i class="diamond" aria-hidden="true"></i><span id="command-meta"></span></div>
+    <div class="command-body" id="command-body"></div>
+    <form method="dialog" class="dialog-actions">
+      <button type="button" class="ghost theme-trigger" data-open-themes aria-label="เปลี่ยนธีม" aria-haspopup="dialog" aria-controls="theme-dialog"><span class="theme-trigger-swatch" aria-hidden="true"></span>ธีม</button>
+      <button class="primary" id="command-dismiss" autofocus>เล่นต่อ</button>
+    </form>
+  </dialog>
+  <dialog id="duel-dialog" class="duel-dialog" aria-labelledby="duel-title" aria-describedby="duel-rule">
+    <h2 id="duel-title">ดวล Tic Tac Toe</h2>
+    <p id="duel-capture"></p>
+    <p id="duel-rule">หมากฮอสชนะจะสวนกินตัวที่เข้ามา ถ้าเสมอหรือแพ้ หมากฮอสจะถูกกินตามเดิม</p>
+    <div class="duel-players"><span class="x">หมากฮอสลง X</span><span class="o">หมากรุกลง O</span></div>
+    <p id="duel-error" class="engine-error" role="alert" hidden></p>
+    <p id="duel-connection-status" role="status"></p>
+    <p class="duel-status" id="duel-status" aria-live="polite"></p>
+    <div class="duel-grid" id="duel-grid" role="group" aria-label="ตาราง Tic Tac Toe" aria-describedby="duel-keyboard"></div>
+    <p class="keyboard-hint" id="duel-keyboard">ใช้ปุ่มลูกศรเลือกช่อง แล้วกด Enter หรือ Space เพื่อลงหมาก</p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost theme-trigger" data-open-themes aria-label="เปลี่ยนธีม" aria-haspopup="dialog" aria-controls="theme-dialog"><span class="theme-trigger-swatch" aria-hidden="true"></span>ธีม</button>
+      <div id="duel-actions" hidden><button class="primary" id="duel-continue" type="button">กลับกระดาน</button></div>
+      <button class="ghost" id="duel-leave" type="button" hidden>กลับเมนู</button>
+      <button class="ghost" id="duel-leave-permanently" type="button" aria-haspopup="dialog" aria-controls="online-leave-dialog" hidden>ออกถาวร</button>
+    </div>
+  </dialog>
+  <dialog id="rules" aria-labelledby="rules-title">
+    <h2 id="rules-title">กติกา</h2>
+    <p id="rules-summary"></p>
+    <ul class="rules-list" id="rules-list"></ul>
+    <p id="rules-note"></p>
+    <form method="dialog" class="dialog-actions"><button class="primary">เข้าใจแล้ว</button></form>
+  </dialog>
+  <dialog id="restart" aria-labelledby="restart-title">
+    <h2 id="restart-title">เริ่มกระดานใหม่หรือไม่</h2>
+    <p id="restart-note">ทั้งสองฝ่ายจะได้วางคำสั่งใหม่ตั้งแต่ต้น</p>
+    <form method="dialog" class="dialog-actions">
+      <button class="ghost" value="cancel">เล่นต่อ</button>
+      <button class="primary" id="restart-confirm" value="restart">เริ่มใหม่</button>
+    </form>
+  </dialog>
+  <dialog id="promotion" aria-labelledby="promotion-title">
+    <h2 id="promotion-title">เลื่อนขั้นเบี้ย</h2>
+    <p>เลือกหมากที่จะแทนเบี้ย</p>
+    <div class="promotions" id="promotions"></div>
+    <form method="dialog" class="dialog-actions"><button class="ghost">ยกเลิก</button></form>
+  </dialog>
+  <dialog id="theme-dialog" class="theme-dialog" aria-labelledby="theme-title">
+    <div class="theme-heading">
+      <h2 id="theme-title">เปลี่ยนธีม</h2>
+      <form method="dialog"><button class="ghost">ปิด</button></form>
+    </div>
+    <fieldset class="theme-options" aria-labelledby="theme-title"></fieldset>
+  </dialog>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

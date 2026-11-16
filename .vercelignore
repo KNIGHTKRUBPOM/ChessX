@@ -1,0 +1,9 @@
+/dist/
+/node_modules/
+/.venv/
+/qa-report/
+/data/
+.env
+.env.*
+*.local
+oauth.config.json

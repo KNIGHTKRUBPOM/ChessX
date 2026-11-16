@@ -1,0 +1,50 @@
+.phaser-grid {
+  position: relative;
+}
+
+.phaser-grid-stage,
+.phaser-grid-status,
+.phaser-grid-keys {
+  position: absolute;
+  inset: 0;
+}
+
+.phaser-grid-status {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 1rem;
+  text-align: center;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.phaser-grid-stage > canvas {
+  display: block;
+  touch-action: manipulation;
+}
+
+.phaser-grid-keys {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-size), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--grid-size), minmax(0, 1fr));
+  pointer-events: none;
+}
+
+.phaser-grid .phaser-grid-key {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.phaser-grid .phaser-grid-key:focus-visible {
+  outline: 3px solid var(--focus, #c0d9bf);
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 2px var(--on-action, #17271e);
+}

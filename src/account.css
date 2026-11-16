@@ -1,0 +1,50 @@
+.account-trigger {
+  max-width: min(24ch, 56vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-heading,
+.account-modes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-heading { justify-content: space-between; }
+.account-modes { flex-wrap: wrap; margin-top: 16px; }
+.account-modes button { flex: 1 1 auto; padding-inline: 10px; }
+.account-modes button[aria-pressed="true"] { background: var(--selection); border-color: var(--action); }
+
+.account-fields {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.account-field { display: grid; gap: 6px; }
+.account-field label { font-size: var(--type-small); font-weight: 700; }
+.account-field small { color: var(--muted); font-size: var(--type-small); }
+
+.account-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--page);
+  color: var(--ink);
+}
+
+.account-field input[aria-invalid="true"] { border-color: var(--command-line); }
+.account-user-name { margin-top: 16px; color: var(--ink); font-weight: 700; }
+.account-user-email { margin-top: 2px; }
+.account-user-name, .account-user-email { overflow-wrap: anywhere; }
+.account-status { margin-top: 12px; font-size: var(--type-small); }
+.account-status:empty { margin-top: 0; }
+.account-error { color: var(--command-ink); }

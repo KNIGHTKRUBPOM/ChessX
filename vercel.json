@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "fastapi",
+  "regions": ["sin1"],
+  "installCommand": "python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock && npm ci --include=dev",
+  "buildCommand": "npm run build",
+  "functions": {
+    "app.py": {
+      "includeFiles": "dist/**",
+      "excludeFiles": "{node_modules/**,qa-report/**,supabase/**}"
+    }
+  }
+}
