@@ -15,6 +15,10 @@
 
 การทดสอบจริงพบว่า GoTrue ส่ง QR ของ TOTP ใหญ่กว่าขีดจำกัดเดิม จึงปรับเพดานเฉพาะการลงทะเบียนปัจจัยและทดสอบซ้ำผ่าน อีกกรณีคือชุด Chromium ต้องรอให้หน้าต่างกู้รหัสปิดก่อนเริ่มกรอกรหัสผ่านใหม่ และหน้าเกมจะอัปเดต session ก่อนคืนโฟกัสให้ฟอร์มล็อกอิน
 
-สิ่งที่ต้องยืนยันใน staging: Google/Facebook กับ provider จริง รวมกรณีอีเมลตรงกัน, SMTP จริงและการส่งถึงปลายทาง, CAPTCHA, การตั้ง security headers และ redirect บนโดเมนจริง, Supabase Advisors และการตรวจ release จริงตาม [คู่มือ CI/CD](CICD.md) การตรวจ workflow ในเครื่องไม่ใช่ผลของ GitHub runner และการผ่าน Chromium ไม่ยืนยันเบราว์เซอร์อื่น
+GitHub-hosted CI และ Database CI ผ่านบน Draft PR รวมการ reset ฐานทดสอบของ runner จาก migrations ใหม่ CodeQL ผ่านทั้ง Python และ TypeScript ส่วน Browser E2E รอบแรกพบว่าเทสต์คีย์บอร์ดส่งตาเดินถัดไปก่อน API ตอบ จึงปรับให้รอ UI พร้อมและยังยืนยันพฤติกรรมคีย์บอร์ดเดิม
+
+npm audit รอบแรกพบ 7 รายการ Moderate ในสายเครื่องมือ lint จาก advisory เดียว [CVE-2026-118764, CVSS 6.9](https://github.com/advisories/GHSA-g3hv-75wg-m249) อัปเดตเฉพาะ `minimatch` ใต้ตัว parser เป็น 11.0.1 แล้ว lint ผ่านและ npm audit พบ 0 รายการ
+
+สิ่งที่ต้องยืนยันใน staging: Google/Facebook กับ provider จริง รวมกรณีอีเมลตรงกัน, SMTP จริงและการส่งถึงปลายทาง, CAPTCHA, การตั้ง security headers และ redirect บนโดเมนจริง, Supabase Advisors และการตรวจ release จริงตาม [คู่มือ CI/CD](CICD.md) การผ่าน Chromium ไม่ยืนยันเบราว์เซอร์อื่น
 
 รันซ้ำด้วย `npm run test:all` หลังเปิด stack ตาม [README](../README.md) ผลรัน QA อยู่ใต้ `qa-report/evidence/` ในเครื่อง และหลักฐาน Chromium ที่ล้มเหลวจากชุด local auth อยู่ใต้ `test-results/local-auth/` ซึ่งไม่ถูก commit

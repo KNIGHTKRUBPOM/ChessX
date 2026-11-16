@@ -215,7 +215,11 @@ def suite(phase):
                     if not actual:
                         one.screenshot(path=str(E/'A11Y-03.png'))
                     results.append({'id':'A11Y-03','expected':'focus in game after setup','actual':focus,'status':'PASS' if actual else 'FAIL'})
-                    for square in ['b2','b4','b6','a5','b4','a5']:tile(one,square)
+                    for origin,destination in [('b2','b4'),('b6','a5'),('b4','a5')]:
+                        tile(one,origin)
+                        expect(one.locator(f'#board [data-coordinate="{origin}"]')).to_have_attribute('aria-pressed','true')
+                        tile(one,destination)
+                        expect(one.locator('#game-view')).not_to_have_attribute('aria-busy','true')
                     x=one.locator('#duel-grid [data-cell="1"]')
                     expect(x).to_be_visible()
                     x.focus(); one.keyboard.press('Enter')
