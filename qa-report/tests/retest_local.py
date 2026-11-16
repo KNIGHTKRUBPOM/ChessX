@@ -28,6 +28,8 @@ class LoopbackOnly(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), LoopbackOnly())
+_default_chrome = Path(r'C:\Program Files\Google\Chrome\Application\chrome.exe')
+CHROME = os.environ.get('CHESS_QA_CHROME') or (str(_default_chrome) if _default_chrome.is_file() else None)
 
 def source_hashes():
     paths = [p for d in ('backend', 'src', 'dist') for p in (ROOT/d).rglob('*') if p.is_file() and '__pycache__' not in p.parts]
@@ -129,7 +131,7 @@ def browser():
     captures=[]
     with sync_playwright() as p:
         profile=Path(tempfile.mkdtemp(prefix='chrome-',dir=E/'temp'))
-        context=p.chromium.launch_persistent_context(str(profile), executable_path=r'C:\Program Files\Google\Chrome\Application\chrome.exe',headless=True,args=['--disable-background-networking','--disable-component-update','--disable-sync','--no-first-run','--disable-default-apps','--no-proxy-server','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost'])
+        context=p.chromium.launch_persistent_context(str(profile), executable_path=CHROME,headless=True,args=['--disable-background-networking','--disable-component-update','--disable-sync','--no-first-run','--disable-default-apps','--no-proxy-server','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost'])
         try:
             context.route('**/*',lambda route: route.continue_() if route.request.url.startswith(BASE+'/') else route.abort())
             context.add_init_script("""window.qaShifts=[]; new PerformanceObserver(l=>window.qaShifts.push(...l.getEntries().filter(x=>!x.hadRecentInput).map(x=>x.value))).observe({type:'layout-shift',buffered:true}); window.qaLcp=0; new PerformanceObserver(l=>{for(const x of l.getEntries()) window.qaLcp=x.startTime;}).observe({type:'largest-contentful-paint',buffered:true});""")

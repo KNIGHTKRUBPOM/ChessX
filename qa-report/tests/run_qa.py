@@ -29,7 +29,7 @@ def server(name, production=False):
         port=sock.getsockname()[1]
     base=f'http://127.0.0.1:{port}'
     with (E/(name+'-server.log')).open('w',encoding='utf8') as log:
-        proc=subprocess.Popen([str(ROOT/'.venv/Scripts/python.exe'),'-B','-m','uvicorn','backend.app:app','--host','127.0.0.1','--port',str(port),'--workers','1','--no-access-log'],cwd=ROOT,env=dict(os.environ,CHESS_ENV='production' if production else '',PYTHONDONTWRITEBYTECODE='1',SUPABASE_URL='',SUPABASE_PUBLISHABLE_KEY='',APP_ORIGIN='',CHESS_ROOM_STORE='memory',SUPABASE_SECRET_KEY=''),stdout=log,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NEW_PROCESS_GROUP',0))
+        proc=subprocess.Popen([os.environ.get('CHESS_QA_PYTHON', sys.executable),'-B','-m','uvicorn','backend.app:app','--host','127.0.0.1','--port',str(port),'--workers','1','--no-access-log'],cwd=ROOT,env=dict(os.environ,CHESS_ENV='production' if production else '',PYTHONDONTWRITEBYTECODE='1',SUPABASE_URL='',SUPABASE_PUBLISHABLE_KEY='',APP_ORIGIN='',CHESS_ROOM_STORE='memory',SUPABASE_SECRET_KEY=''),stdout=log,stderr=subprocess.STDOUT,creationflags=getattr(subprocess,'CREATE_NEW_PROCESS_GROUP',0))
         prior.BASE=base
         try:
             for _ in range(40):

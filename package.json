@@ -10,13 +10,29 @@
     "dev": "vite --host localhost",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
-    "preview": "vite preview --host localhost"
+    "preview": "vite preview --host localhost",
+    "dev:full": "node scripts/local.mjs serve",
+    "lint": "eslint src vite.config.ts",
+    "db:start": "node scripts/local.mjs db:start",
+    "db:reset": "node scripts/local.mjs db:reset",
+    "db:migrate": "node scripts/local.mjs db:migrate",
+    "db:lint": "node scripts/local.mjs db:lint",
+    "db:test": "node scripts/local.mjs db:test",
+    "db:types": "node scripts/local.mjs db:types",
+    "db:types:check": "node scripts/local.mjs db:types:check",
+    "test:unit": "node scripts/local.mjs unit",
+    "test:integration": "node scripts/local.mjs integration",
+    "test:e2e": "node scripts/local.mjs e2e",
+    "test:all": "node scripts/local.mjs test:all"
   },
   "dependencies": {
     "phaser": "3.90.0"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "2.119.0",
+    "eslint": "9.39.5",
     "typescript": "5.9.3",
+    "typescript-eslint": "8.72.2",
     "vite": "8.3.8"
   }
 }

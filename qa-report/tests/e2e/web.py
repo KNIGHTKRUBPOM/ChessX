@@ -5,7 +5,7 @@ from playwright.sync_api import sync_playwright,expect
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from run_qa import ROOT,E,server,report,record,prior,previous_suite
 
-CHROME=r'C:\Program Files\Google\Chrome\Application\chrome.exe'
+CHROME=prior.CHROME
 args=['--disable-background-networking','--disable-component-update','--disable-sync','--no-proxy-server','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1']
 
 def tile(page, algebraic):

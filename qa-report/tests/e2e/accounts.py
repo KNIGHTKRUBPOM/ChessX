@@ -93,7 +93,7 @@ def account_contract(page, url):
 
     code.fill("000000")
     submit.click()
-    expect(status).to_contain_text("รหัสยืนยันไม่ถูกต้องหรือหมดอายุ")
+    expect(status).to_have_text("รหัสไม่ถูกต้องหรือหมดอายุ กรุณาตรวจรหัสอีกครั้ง")
     expect(code).to_be_visible()
     code.fill("112233")
     submit.click()
