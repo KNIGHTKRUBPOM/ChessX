@@ -92,7 +92,7 @@ function roomResponse(path = '', payload?: unknown, token?: string, options?: { 
     body: payload === undefined ? undefined : JSON.stringify(payload),
     headers,
     cache: 'no-store',
-    credentials: 'omit',
+    credentials: payload !== undefined && !token ? 'same-origin' : 'omit',
     mode: 'same-origin',
     redirect: 'error',
     referrerPolicy: 'no-referrer',

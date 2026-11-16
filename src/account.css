@@ -48,3 +48,23 @@
 .account-status { margin-top: 12px; font-size: var(--type-small); }
 .account-status:empty { margin-top: 0; }
 .account-error { color: var(--command-ink); }
+.account-social, .account-security-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 14px;
+}
+.account-social button { flex: 1 0 auto; }
+.account-security-actions button { min-height: var(--tap); }
+.account-field select {
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--page);
+  color: var(--ink);
+}
+#security-enrollment img, #security-enrollment code { display: block; margin-block: 8px; overflow-wrap: anywhere; }
+#account-captcha { max-inline-size: 100%; overflow-x: auto; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 12px 20px; padding-block: 12px; }
+.legal-links a { color: var(--muted); font-size: var(--type-small); text-underline-offset: 3px; }

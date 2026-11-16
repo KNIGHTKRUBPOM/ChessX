@@ -85,6 +85,7 @@
         <section class="panel" id="game-history" aria-labelledby="history-title" hidden></section>
       </aside>
     </main>
+    <footer class="legal-links"><a href="/privacy.html">ความเป็นส่วนตัว</a><a href="/terms.html">เงื่อนไขการใช้งาน</a></footer>
   </div>
   <dialog id="account-dialog" class="account-dialog" aria-labelledby="account-title">
     <div class="account-heading">
@@ -96,6 +97,11 @@
         <button type="button" class="ghost" id="account-show-login" aria-pressed="true">เข้าสู่ระบบ</button>
         <button type="button" class="ghost" id="account-show-register" aria-pressed="false">สมัครสมาชิก</button>
         <button type="button" class="ghost" id="account-show-confirm" aria-pressed="false">ยืนยันอีเมล</button>
+        <button type="button" class="ghost" id="account-show-recover" aria-pressed="false">ลืมรหัสผ่าน</button>
+      </div>
+      <div class="account-social" id="account-social" hidden>
+        <button type="button" class="ghost" id="account-google" hidden>เข้าสู่ระบบด้วย Google</button>
+        <button type="button" class="ghost" id="account-facebook" hidden>เข้าสู่ระบบด้วย Facebook</button>
       </div>
       <form id="account-form" method="post" action="./api/account/login" aria-label="ข้อมูลบัญชี">
         <fieldset class="account-fields" id="account-fields">
@@ -119,6 +125,7 @@
               maxlength="10" autocomplete="one-time-code" aria-describedby="account-code-note" disabled>
             <small id="account-code-note">กรอกรหัสที่ได้รับทางอีเมล</small>
           </div>
+          <div id="account-captcha" hidden></div>
           <button type="submit" class="primary" id="account-submit">เข้าสู่ระบบ</button>
         </fieldset>
       </form>
@@ -127,6 +134,7 @@
       <p class="account-user-name" id="account-user-name" dir="auto"></p>
       <p class="account-user-email" id="account-user-email" dir="ltr"></p>
       <div class="dialog-actions">
+        <button type="button" class="ghost" id="account-settings">ตั้งค่าบัญชี</button>
         <button type="button" class="ghost" id="account-logout">ออกจากระบบ</button>
       </div>
     </div>
