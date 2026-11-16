@@ -1,0 +1,76 @@
+name: Staging deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chessx-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify-code:
+    if: >-
+      github.repository == 'KNIGHTKRUBPOM/ChessX' &&
+      github.ref == 'refs/heads/main' &&
+      vars.CHESS_STAGING_VERCEL_PROJECT_ID != ''
+    uses: ./.github/workflows/ci.yml
+    with:
+      commit: ${{ github.sha }}
+  verify-migrations:
+    if: >-
+      github.repository == 'KNIGHTKRUBPOM/ChessX' &&
+      github.ref == 'refs/heads/main' &&
+      vars.CHESS_STAGING_VERCEL_PROJECT_ID != ''
+    uses: ./.github/workflows/db-ci.yml
+    with:
+      commit: ${{ github.sha }}
+  deploy:
+    needs: [verify-code, verify-migrations]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: staging
+      url: ${{ vars.APP_ORIGIN }}
+    env:
+      APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+      CHESS_ACCOUNT_ENABLED: ${{ vars.CHESS_ACCOUNT_ENABLED }}
+      CHESS_STAGING_SUPABASE_REF: ${{ vars.CHESS_STAGING_SUPABASE_REF }}
+      CHESS_PRODUCTION_SUPABASE_REF: ${{ vars.CHESS_PRODUCTION_SUPABASE_REF }}
+      CHESS_STAGING_VERCEL_PROJECT_ID: ${{ vars.CHESS_STAGING_VERCEL_PROJECT_ID }}
+      CHESS_PRODUCTION_VERCEL_PROJECT_ID: ${{ vars.CHESS_PRODUCTION_VERCEL_PROJECT_ID }}
+      CHESS_PRODUCTION_ORIGIN: ${{ vars.CHESS_PRODUCTION_ORIGIN }}
+      VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+      VERCEL_TELEMETRY_DISABLED: '1'
+      DO_NOT_TRACK: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version-file: .python-version
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: '3.1.0'
+      - name: Install Vercel CLI
+        run: npm install --global --no-audit --no-fund vercel@65.16.0
+      - name: Verify targets and apply staging migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python scripts/ci/release.py target staging
+          python scripts/ci/release.py plan staging
+          python scripts/ci/release.py apply staging
+      - name: Deploy the staging Vercel project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: python scripts/ci/release.py deploy staging
+      - run: python scripts/ci/smoke_release.py staging

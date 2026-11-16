@@ -1,0 +1,85 @@
+.profile-trigger {
+  max-width: min(24ch, 56vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dialog {
+  width: min(480px, calc(100% - 32px));
+}
+
+.profile-heading,
+.profile-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.profile-heading {
+  justify-content: space-between;
+}
+
+.profile-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(38vh, 280px);
+  overflow: auto;
+  margin: 16px 0;
+  padding: 4px;
+  list-style: none;
+}
+
+.profile-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.profile-choice span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.profile-choice[aria-pressed="true"] {
+  background: var(--selection);
+}
+
+.profile-current {
+  flex: none;
+  color: var(--action);
+  font-size: .8rem;
+}
+
+.profile-create label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.profile-fields {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-fields input {
+  flex: 1 1 10rem;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--page);
+  color: var(--ink);
+}
+
+.profile-error {
+  color: var(--command-ink);
+}
+
+.profile-error:empty {
+  margin: 0;
+}

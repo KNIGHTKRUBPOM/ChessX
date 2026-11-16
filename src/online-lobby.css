@@ -1,0 +1,64 @@
+.online-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.online-entry:has(> :not([hidden])) { min-height: var(--tap); }
+.online-entry:not(:has(> :not([hidden]))) { display: none; }
+
+.online-room {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+}
+
+.online-room > div:first-child { min-width: 0; }
+.online-room p { margin-top: 4px; font-size: var(--type-small); overflow-wrap: anywhere; }
+.online-identification, .online-actions, .online-tabs, .online-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.online-identification { flex-wrap: wrap; gap: 6px 12px; }
+.online-identification span { color: var(--muted); font-size: var(--type-small); }
+#online-room-code { color: var(--ink); font-family: var(--type-coordinate); }
+.online-actions { flex-wrap: wrap; }
+#online-invite { flex-basis: 100%; }
+.online-status { color: var(--command-ink); font-size: var(--type-small); }
+.online-heading { justify-content: space-between; }
+.online-tabs { margin-block: 16px; }
+.online-tabs button { flex: 1; }
+.online-tabs button[aria-pressed="true"] { background: var(--selection); border-color: var(--action); }
+.online-form, .online-field { display: grid; gap: 6px; }
+.online-field, .online-form .primary { margin-top: 8px; }
+.online-form label { font-size: var(--type-small); font-weight: 700; }
+
+.online-form input, .online-form select, #online-invite {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--page);
+  color: var(--ink);
+  font: inherit;
+}
+
+.online-form select:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .online-entry { justify-content: flex-start; }
+  .online-room { padding-inline: 12px; }
+}
