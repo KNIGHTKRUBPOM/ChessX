@@ -6,6 +6,7 @@ from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+import sys
 from pathlib import Path
 import re
 import shutil
@@ -153,7 +154,7 @@ def worker(name, fixture, upstream, cert, **overrides):
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
-    python = ROOT / (".venv/Scripts/python.exe" if os.name == "nt" else ".venv/bin/python")
+    python = os.environ.get('CHESS_QA_PYTHON', sys.executable)
     env = dict(
         os.environ,
         SUPABASE_URL=upstream,

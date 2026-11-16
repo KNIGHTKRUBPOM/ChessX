@@ -1,13 +1,17 @@
 """Same-origin account endpoints backed by Supabase Auth."""
 
-from dataclasses import dataclass
+from base64 import urlsafe_b64decode
+from binascii import Error as Base64Error
+from dataclasses import dataclass, field
 from http.client import HTTPException as UpstreamHttpError
 import json
+import logging
 import os
 import re
 from unicodedata import category, normalize
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UpstreamRequest
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -22,12 +26,17 @@ from .supabase_http import opener as _auth_http, parse_origin
 _ACCOUNT_PATH = "/api/account"
 _ACCESS_COOKIE = "chessmess_access"
 _REFRESH_COOKIE = "chessmess_refresh"
+_RECOVERY_COOKIE = "chessmess_recovery_access"
+_ACCESS_PATH = "/api"
 _REFRESH_AGE = 30 * 24 * 60 * 60
 _EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 _ACCESS_TOKEN = re.compile(r"[A-Za-z0-9._-]{1,3800}")
 _REFRESH_TOKEN = re.compile(r"[A-Za-z0-9_-]{1,512}")
 _PUBLISHABLE_KEY = re.compile(r"sb_publishable_[A-Za-z0-9_-]{1,128}")
+_SECRET_KEY = re.compile(r"sb_secret_[A-Za-z0-9_-]{1,128}")
+_SITE_KEY = re.compile(r"[A-Za-z0-9_-]{1,100}")
 _UPSTREAM_BODY_LIMIT = 64 * 1024
+_logger = logging.getLogger("uvicorn.error")
 
 
 class _AccountRoute(APIRoute):
@@ -51,7 +60,7 @@ account_router = APIRouter(prefix=_ACCOUNT_PATH, tags=["accounts"], route_class=
 class _AuthConfig:
     origin: str
     supabase_url: str
-    publishable_key: str
+    publishable_key: str = field(repr=False)
 
     @property
     def secure_cookie(self):
@@ -60,10 +69,11 @@ class _AuthConfig:
 
 @dataclass(frozen=True)
 class _Session:
-    access: str
-    refresh: str
+    access: str = field(repr=False)
+    refresh: str = field(repr=False)
     expires_in: int
     user: dict
+    provider_user: dict = field(repr=False)
 
 
 def _config() -> _AuthConfig | None:
@@ -71,7 +81,7 @@ def _config() -> _AuthConfig | None:
         return None
     production = os.getenv("CHESS_ENV", "").casefold() == "production"
     origin = parse_origin(os.getenv("APP_ORIGIN", ""), allow_http_loopback=not production)
-    supabase_url = parse_origin(os.getenv("SUPABASE_URL", ""))
+    supabase_url = parse_origin(os.getenv("SUPABASE_URL", ""), allow_http_loopback=not production)
     key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
     if not origin or not supabase_url or not _PUBLISHABLE_KEY.fullmatch(key):
         return None
@@ -87,30 +97,39 @@ def _write_config(request: Request) -> _AuthConfig:
     return config
 
 
-def _supabase_request(config, method, path, payload=None, token=None):
-    headers = {"Accept": "application/json", "apikey": config.publishable_key}
+def _gateway_json(config, method, path, payload=None, token=None, *, key=None, timeout=5,
+                  response_limit=_UPSTREAM_BODY_LIMIT):
+    headers = {"Accept": "application/json", "apikey": key or config.publishable_key}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     if payload is not None:
         headers["Content-Type"] = "application/json"
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
-    request = UpstreamRequest(config.supabase_url + "/auth/v1" + path, data=data, headers=headers, method=method)
+    request = UpstreamRequest(config.supabase_url + path, data=data, headers=headers, method=method)
     try:
         try:
-            response = _auth_http.open(request, timeout=5)
+            response = _auth_http.open(request, timeout=timeout)
         except HTTPError as error:
             response = error
         with response:
             status = response.status
-            body = response.read(_UPSTREAM_BODY_LIMIT + 1)
+            body = response.read(response_limit + 1)
     except (OSError, URLError, UpstreamHttpError, ValueError):
         raise HTTPException(503, "auth_unavailable") from None
-    if len(body) > _UPSTREAM_BODY_LIMIT:
+    if len(body) > response_limit:
         raise HTTPException(503, "auth_unavailable")
     try:
         result = json.loads(body) if body else {}
     except (ValueError, UnicodeError):
-        result = None
+        if 200 <= status < 300:
+            raise HTTPException(503, "auth_unavailable") from None
+        result = {}
+    return status, result
+
+
+def _supabase_request(config, method, path, payload=None, token=None, *, response_limit=_UPSTREAM_BODY_LIMIT):
+    status, result = _gateway_json(config, method, "/auth/v1" + path, payload, token,
+                                   response_limit=response_limit)
     if not isinstance(result, dict):
         if 200 <= status < 300:
             raise HTTPException(503, "auth_unavailable")
@@ -126,6 +145,48 @@ def _provider_failure(status: int):
 
 def _error_code(data: dict):
     return data.get("error_code") or data.get("code")
+
+
+def _canonical_uuid(value: object) -> str | None:
+    if isinstance(value, str) and len(value) == 36:
+        try:
+            return str(UUID(value))
+        except ValueError:
+            pass
+    return None
+
+
+def _server_key() -> str | None:
+    key = os.getenv("SUPABASE_SECRET_KEY", "")
+    return key if _SECRET_KEY.fullmatch(key) else None
+
+
+def _audit(config: _AuthConfig, event: str, actor: str | None = None):
+    # Logging remains available if remote audit storage is temporarily unreachable.
+    _logger.info("%s", json.dumps({"event": event}, separators=(",", ":")))
+    key = _server_key()
+    if key is None:
+        return
+    try:
+        status, _ = _gateway_json(config, "POST", "/rest/v1/rpc/chessmess_account_audit", {
+            "p_event": event,
+            "p_actor_id": _canonical_uuid(actor),
+        }, key=key, timeout=2)
+        if not 200 <= status < 300:
+            _logger.warning("account audit storage unavailable")
+    except HTTPException:
+        _logger.warning("account audit storage unavailable")
+
+
+def _captcha_site_key() -> str | None:
+    key = os.getenv("AUTH_CAPTCHA_SITE_KEY", "")
+    return key if _SITE_KEY.fullmatch(key) else None
+
+
+def _captcha_proof(token: str | None) -> dict:
+    if _captcha_site_key() and not token:
+        raise HTTPException(400, "captcha_required")
+    return {"gotrue_meta_security": {"captcha_token": token}} if token else {}
 
 
 def _display_name(value: str) -> str | None:
@@ -155,23 +216,77 @@ def _session(data: dict) -> _Session:
     expires_in = data.get("expires_in", 3600)
     if type(expires_in) is not int or not 1 <= expires_in <= 24 * 60 * 60:
         raise HTTPException(503, "auth_unavailable")
-    return _Session(access, refresh, expires_in, _profile(data.get("user")))
+    provider_user = data.get("user")
+    return _Session(access, refresh, expires_in, _profile(provider_user), provider_user)
 
 
-def _cookie_options(config: _AuthConfig):
-    return {"httponly": True, "secure": config.secure_cookie, "samesite": "lax", "path": _ACCOUNT_PATH}
+def _cookie_options(config: _AuthConfig, path: str = _ACCOUNT_PATH):
+    return {"httponly": True, "secure": config.secure_cookie, "samesite": "lax", "path": path}
 
 
 def _set_session(response: Response, config: _AuthConfig, session: _Session):
-    options = _cookie_options(config)
-    response.set_cookie(_ACCESS_COOKIE, session.access, max_age=session.expires_in, **options)
-    response.set_cookie(_REFRESH_COOKIE, session.refresh, max_age=_REFRESH_AGE, **options)
+    response.delete_cookie(_ACCESS_COOKIE, **_cookie_options(config))
+    response.delete_cookie(_RECOVERY_COOKIE, **_cookie_options(config))
+    response.set_cookie(_ACCESS_COOKIE, session.access, max_age=session.expires_in, **_cookie_options(config, _ACCESS_PATH))
+    response.set_cookie(_REFRESH_COOKIE, session.refresh, max_age=_REFRESH_AGE, **_cookie_options(config))
 
 
 def _clear_session(response: Response, config: _AuthConfig):
-    options = _cookie_options(config)
-    response.delete_cookie(_ACCESS_COOKIE, **options)
-    response.delete_cookie(_REFRESH_COOKIE, **options)
+    response.delete_cookie(_ACCESS_COOKIE, **_cookie_options(config))
+    response.delete_cookie(_ACCESS_COOKIE, **_cookie_options(config, _ACCESS_PATH))
+    response.delete_cookie(_REFRESH_COOKIE, **_cookie_options(config))
+    response.delete_cookie(_RECOVERY_COOKIE, **_cookie_options(config))
+
+
+def _validated_user(config: _AuthConfig, access: str) -> dict | None:
+    if not _ACCESS_TOKEN.fullmatch(access):
+        return None
+    status, data = _supabase_request(config, "GET", "/user", token=access)
+    if status == 200:
+        _profile(data)
+        return data
+    if status not in (401, 403):
+        _provider_failure(status)
+    return None
+
+
+def _verified_claims(access: str, user: dict) -> dict:
+    """Read assurance claims only after getting the same user from Supabase Auth."""
+    try:
+        _, payload, _ = access.split(".")
+        claims = json.loads(urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (ValueError, UnicodeError, Base64Error):
+        return {}
+    if not isinstance(claims, dict) or claims.get("sub") != user.get("id"):
+        return {}
+    return claims
+
+
+def _has_verified_factor(user: dict) -> bool:
+    factors = user.get("factors")
+    return isinstance(factors, list) and any(
+        isinstance(factor, dict) and factor.get("status") == "verified" for factor in factors
+    )
+
+
+def _account_state(access: str, user: dict) -> dict:
+    state = {"enabled": True, "user": _profile(user)}
+    if _has_verified_factor(user) and _verified_claims(access, user).get("aal") != "aal2":
+        state["mfaRequired"] = True
+    return state
+
+
+def optional_player_id(request: Request) -> str | None:
+    config = _config()
+    access = request.cookies.get(_ACCESS_COOKIE, "")
+    if not config or not access:
+        return None
+    user = _validated_user(config, access)
+    if not user or not user.get("email_confirmed_at"):
+        return None
+    if _has_verified_factor(user) and _verified_claims(access, user).get("aal") != "aal2":
+        return None
+    return _canonical_uuid(user.get("id"))
 
 
 def _refresh(config: _AuthConfig, token: str) -> _Session | None:
@@ -197,6 +312,7 @@ class _EmailInput(DataModel):
 
 class _LoginInput(_EmailInput):
     password: str = Field(min_length=1, max_length=72, repr=False)
+    captchaToken: str | None = Field(default=None, max_length=2048, repr=False)
 
     @field_validator("password")
     @classmethod
@@ -238,17 +354,14 @@ def read_account(request: Request, response: Response):
         return {"enabled": True, "user": None}
     access = request.cookies.get(_ACCESS_COOKIE, "")
     refresh = request.cookies.get(_REFRESH_COOKIE, "")
-    if _ACCESS_TOKEN.fullmatch(access):
-        status, data = _supabase_request(config, "GET", "/user", token=access)
-        if status == 200:
-            return {"enabled": True, "user": _profile(data)}
-        if status not in (401, 403):
-            _provider_failure(status)
+    user = _validated_user(config, access)
+    if user is not None:
+        return _account_state(access, user)
     if _REFRESH_TOKEN.fullmatch(refresh):
         session = _refresh(config, refresh)
         if session:
             _set_session(response, config, session)
-            return {"enabled": True, "user": session.user}
+            return _account_state(session.access, session.provider_user)
     if access or refresh:
         _clear_session(response, config)
     return {"enabled": True, "user": None}
@@ -256,6 +369,7 @@ def read_account(request: Request, response: Response):
 
 @account_router.post("/register", status_code=202)
 def register_account(payload: _Registration, config: _AuthConfig = Depends(_write_config)):
+    proof = _captcha_proof(payload.captchaToken)
     status, settings = _supabase_request(config, "GET", "/settings")
     if status != 200 or settings.get("mailer_autoconfirm") is not False:
         _provider_failure(status)
@@ -263,6 +377,7 @@ def register_account(payload: _Registration, config: _AuthConfig = Depends(_writ
         "email": payload.email,
         "password": payload.password,
         "data": {"display_name": payload.displayName},
+        **proof,
     })
     code = _error_code(data)
     if data.get("access_token") or data.get("refresh_token"):
@@ -289,15 +404,19 @@ def confirm_account(payload: _Confirmation, config: _AuthConfig = Depends(_write
 
 @account_router.post("/login")
 def login_account(payload: _LoginInput, response: Response, config: _AuthConfig = Depends(_write_config)):
-    status, data = _supabase_request(config, "POST", "/token?grant_type=password", payload.model_dump())
+    status, data = _supabase_request(config, "POST", "/token?grant_type=password", {
+        "email": payload.email, "password": payload.password, **_captcha_proof(payload.captchaToken),
+    })
     code = _error_code(data)
     if status == 200:
         session = _session(data)
         _set_session(response, config, session)
-        return {"enabled": True, "user": session.user}
+        _audit(config, "login_success", session.user["id"])
+        return _account_state(session.access, session.provider_user)
     if code == "email_not_confirmed":
         raise HTTPException(403, "email_unconfirmed")
     if status in (400, 401, 403, 422):
+        _audit(config, "login_failed")
         raise HTTPException(401, "invalid_credentials")
     _provider_failure(status)
 

@@ -76,7 +76,8 @@ def configured_room_store() -> SupabaseRoomStore | None:
     mode = os.getenv("CHESS_ROOM_STORE", "memory").strip().casefold()
     if mode == "memory":
         return None
-    origin = parse_origin(os.getenv("SUPABASE_URL", ""))
+    production = os.getenv("CHESS_ENV", "").casefold() == "production"
+    origin = parse_origin(os.getenv("SUPABASE_URL", ""), allow_http_loopback=not production)
     secret_key = os.getenv("SUPABASE_SECRET_KEY", "").strip()
     if mode != "supabase" or not origin or not _SECRET_KEY.fullmatch(secret_key):
         raise rooms_unavailable()

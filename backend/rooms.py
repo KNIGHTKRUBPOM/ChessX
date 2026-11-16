@@ -24,6 +24,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import Field, field_validator
 
 from . import chess_rules, duel_rules, hybrid_rules
+from .account import optional_player_id
 from .game import ENGINES, deck_for, outcome_for
 from .models import Card, Cell, DataModel, Mode, MoveChoice, Side, Square
 from .room_store import SupabaseRoomStore, configured_room_store, rooms_unavailable
@@ -96,6 +97,7 @@ RoomAction = Annotated[SetupAction | MoveAction | DuelAction, Field(discriminato
 class Seat:
     name: str
     secret_hash: bytes | None
+    account_id: str | None = None
 
 
 @dataclass
@@ -185,9 +187,9 @@ def _enforce_creation_quota(source: str, now: float):
         raise HTTPException(429, "Too many active rooms from this connection.")
 
 
-def _new_seat(name: str) -> tuple[str, Seat]:
+def _new_seat(name: str, account_id: str | None = None) -> tuple[str, Seat]:
     token = token_urlsafe(32)
-    return token, Seat(name, sha256(token.encode("ascii")).digest())
+    return token, Seat(name, sha256(token.encode("ascii")).digest(), account_id)
 
 
 def _find_room(code: str) -> Room:
@@ -378,7 +380,10 @@ def _stored_payload(room: Room) -> dict:
     del payload["created_by"], payload["changed_at"]
     payload["schema_version"] = 1
     for side, seat in room.seats.items():
-        payload["seats"][side]["secret_hash"] = seat.secret_hash.hex() if seat.secret_hash is not None else None
+        stored_seat = payload["seats"][side]
+        stored_seat["secret_hash"] = seat.secret_hash.hex() if seat.secret_hash is not None else None
+        if seat.account_id is None:
+            stored_seat.pop("account_id", None)
     return payload
 
 
@@ -489,7 +494,7 @@ def rooms_health():
 def create_room(request: CreateRoomRequest, http_request: Request):
     store = configured_room_store()
     source = _request_source(http_request)
-    token, seat = _new_seat(request.name)
+    token, seat = _new_seat(request.name, optional_player_id(http_request) if store else None)
     if store:
         room = _create_shared_room(store, request.mode, seat, source)
     else:
@@ -513,8 +518,9 @@ def create_room(request: CreateRoomRequest, http_request: Request):
 
 
 @room_router.post("/{code}/join")
-def join_room(code: str, request: PlayerRequest):
-    token, seat = _new_seat(request.name)
+def join_room(code: str, request: PlayerRequest, http_request: Request):
+    store = configured_room_store()
+    token, seat = _new_seat(request.name, optional_player_id(http_request) if store else None)
 
     def join(room: Room) -> Side:
         if "b" in room.seats:

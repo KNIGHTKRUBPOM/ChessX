@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import duel_rules, hybrid_rules
 from .account import account_router
+from .account_security import account_security_router
 from .body_limit import ApiBodyLimit
 from .game import DECK, ENGINES, deck_for, outcome_for, uses_discs
 from .rooms import room_router
@@ -26,6 +27,7 @@ app = FastAPI(
 )
 app.include_router(room_router)
 app.include_router(account_router)
+app.include_router(account_security_router)
 app.add_middleware(ApiBodyLimit)
 
 hashed_asset = re.compile(r"/assets/(?:[^/]+/)*[^/]+-[A-Za-z0-9_-]{8}\.[A-Za-z0-9]+")
@@ -48,7 +50,14 @@ docs_csp = (
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     docs_page = not production and request.url.path in {"/docs", "/redoc", "/docs/oauth2-redirect"}
-    response.headers["Content-Security-Policy"] = docs_csp if docs_page else game_csp
+    csp = docs_csp if docs_page else game_csp
+    if not docs_page and getenv("AUTH_CAPTCHA_SITE_KEY", "").strip():
+        widget = "https://challenges.cloudflare.com"
+        csp = csp.replace("script-src 'self';", f"script-src 'self' {widget};")
+        csp = csp.replace("connect-src 'self';", f"connect-src 'self' {widget}; frame-src {widget};")
+    response.headers["Content-Security-Policy"] = csp
+    if production:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
