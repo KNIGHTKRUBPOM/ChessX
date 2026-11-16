@@ -1,0 +1,152 @@
+name: Production deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Protected release tag already reachable from main, e.g. v1.2.3'
+        type: string
+        required: true
+      approve_database_change:
+        description: 'I approve the database migration for this exact release. Environment approval is also required.'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chessx-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.repository == 'KNIGHTKRUBPOM/ChessX' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      commit: ${{ steps.release.outputs.commit }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version-file: .python-version
+      - name: Verify release consent, tag ancestry and reviewer policy
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          APPROVE_DB_CHANGE: ${{ inputs.approve_database_change }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$APPROVE_DB_CHANGE" != true ]]; then
+            echo "::error::Explicit approval of this release's database migration is required."
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Select a release tag of the form v1.2.3."
+            exit 1
+          fi
+          commit=$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")
+          git merge-base --is-ancestor "$commit" origin/main
+          python scripts/ci/release.py reviewers production
+          printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
+          printf '### Production release %s\n\nCommit: `%s`\n' "$RELEASE_TAG" "$commit" >> "$GITHUB_STEP_SUMMARY"
+  verify-code:
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+    with:
+      commit: ${{ needs.preflight.outputs.commit }}
+  verify-migrations:
+    needs: preflight
+    uses: ./.github/workflows/db-ci.yml
+    with:
+      commit: ${{ needs.preflight.outputs.commit }}
+  verify-browser:
+    needs: preflight
+    uses: ./.github/workflows/e2e.yml
+    with:
+      commit: ${{ needs.preflight.outputs.commit }}
+  deploy:
+    needs: [preflight, verify-code, verify-migrations, verify-browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.APP_ORIGIN }}
+    env:
+      APP_ORIGIN: ${{ vars.APP_ORIGIN }}
+      CHESS_ACCOUNT_ENABLED: ${{ vars.CHESS_ACCOUNT_ENABLED }}
+      CHESS_STAGING_SUPABASE_REF: ${{ vars.CHESS_STAGING_SUPABASE_REF }}
+      CHESS_PRODUCTION_SUPABASE_REF: ${{ vars.CHESS_PRODUCTION_SUPABASE_REF }}
+      CHESS_STAGING_VERCEL_PROJECT_ID: ${{ vars.CHESS_STAGING_VERCEL_PROJECT_ID }}
+      CHESS_PRODUCTION_VERCEL_PROJECT_ID: ${{ vars.CHESS_PRODUCTION_VERCEL_PROJECT_ID }}
+      CHESS_PRODUCTION_ORIGIN: ${{ vars.CHESS_PRODUCTION_ORIGIN }}
+      CHESS_BACKUP_AGE_RECIPIENT: ${{ vars.CHESS_BACKUP_AGE_RECIPIENT }}
+      VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+      VERCEL_TELEMETRY_DISABLED: '1'
+      DO_NOT_TRACK: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.preflight.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version-file: .python-version
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: '3.1.0'
+      - name: Install Vercel CLI
+        run: npm install --global --no-audit --no-fund vercel@65.16.0
+      - name: Install tools for encrypted logical backups
+        if: env.CHESS_BACKUP_AGE_RECIPIENT != ''
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y age
+          docker pull postgres@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
+      - name: Verify production target and dry-run migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python scripts/ci/release.py target production
+          python scripts/ci/release.py plan production
+      - name: Verify managed backup or create encrypted logical backup
+        id: backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_BACKUP_TOKEN: ${{ secrets.SUPABASE_BACKUP_TOKEN }}
+        run: |
+          python scripts/ci/release.py backup production
+          if [[ -s "$RUNNER_TEMP/chessx-backup/production.dump.age" ]]; then
+            echo 'encrypted=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Retain encrypted backup when one was created
+        if: steps.backup.outputs.encrypted == 'true'
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: encrypted-db-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/chessx-backup/production.dump.age
+          retention-days: 7
+          if-no-files-found: error
+      - name: Apply approved migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python scripts/ci/release.py apply production
+      - name: Deploy Production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: python scripts/ci/release.py deploy production
+      - run: python scripts/ci/smoke_release.py production
+      - name: Record release failure
+        if: failure()
+        run: echo '### Production release failed. Check the failed step and rollback runbook.' >> "$GITHUB_STEP_SUMMARY"

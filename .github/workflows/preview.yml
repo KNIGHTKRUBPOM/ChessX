@@ -1,0 +1,49 @@
+name: Preview deployment
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chessx-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: >-
+      github.repository == 'KNIGHTKRUBPOM/ChessX' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      vars.CHESS_PREVIEW_VERCEL_PROJECT_ID != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: preview
+    env:
+      CHESS_STAGING_SUPABASE_REF: ${{ vars.CHESS_STAGING_SUPABASE_REF }}
+      CHESS_PRODUCTION_SUPABASE_REF: ${{ vars.CHESS_PRODUCTION_SUPABASE_REF }}
+      CHESS_PREVIEW_VERCEL_PROJECT_ID: ${{ vars.CHESS_PREVIEW_VERCEL_PROJECT_ID }}
+      CHESS_STAGING_VERCEL_PROJECT_ID: ${{ vars.CHESS_STAGING_VERCEL_PROJECT_ID }}
+      CHESS_PRODUCTION_VERCEL_PROJECT_ID: ${{ vars.CHESS_PRODUCTION_VERCEL_PROJECT_ID }}
+      VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+      VERCEL_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version-file: .python-version
+      - run: python scripts/ci/release.py target preview
+      - name: Install Vercel CLI
+        run: npm install --global --no-audit --no-fund vercel@65.16.0
+      - name: Deploy protected Preview with account features disabled
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: python scripts/ci/release.py deploy preview
