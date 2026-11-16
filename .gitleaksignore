@@ -1,0 +1,2 @@
+# Synthetic OAuth authorization code in the local PKCE mock at this historical commit.
+75b89a98d9af6064b1889632f9cda7943e8318fb:qa-report/tests/integration/accounts.py:generic-api-key:247

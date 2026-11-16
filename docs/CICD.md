@@ -9,7 +9,7 @@ Workflow ใช้ runner `ubuntu-24.04`, Node จาก `.nvmrc`, Python จา
 | `ci.yml` | Lint, type check, unit tests, build และตรวจ secret ที่อาจหลุดเข้า bundle |
 | `db-ci.yml` | เปิด Supabase local, reset/migrate, lint, pgTAP, ตรวจ drift และ generated types, integration tests |
 | `e2e.yml` | ติดตั้ง Chromium แล้วทดสอบผ่าน Playwright กับ Supabase local และ Mailpit เก็บ artifact เมื่อทดสอบไม่ผ่าน 5 วัน |
-| `security.yml` | สแกน secret ด้วย Gitleaks, npm audit, รายงาน license จาก SBOM, dependency review ของ PR และ CodeQL ฝั่ง TypeScript/Python ทำงานรายสัปดาห์ด้วย |
+| `security.yml` | สแกนประวัติ Git ด้วย Gitleaks CLI แบบตรวจ checksum, npm audit, รายงาน license จาก SBOM และ CodeQL ฝั่ง TypeScript/Python เปิด GitHub Dependency Review เพิ่มได้เมื่อเปิด Dependency Graph แล้ว ทำงานรายสัปดาห์ด้วย |
 | `preview.yml` | Deploy เมื่อ PR ภายใน repo ออกจากสถานะ draft จากสมาชิกที่ได้รับอนุญาตและตั้ง GitHub Environment `preview` ใช้ Vercel project ของ Preview และข้อมูลจำลองจาก Staging Supabase ปิดบัญชีไว้สำหรับ URL ชั่วคราว |
 | `deploy-staging.yml` | เมื่อ push ถึง `main` ทดสอบ commit และ migration กับ local ก่อน dry-run แล้ว apply ที่ staging จากนั้น deploy และ smoke test |
 | `deploy-production.yml` | เปิดจาก Actions บน `main` พร้อม tag `vX.Y.Z` และยืนยัน migration ของรุ่นนั้น ทดสอบ commit ที่ tag ระบุ รอ Required reviewers แล้วตรวจ dry-run, backup, apply, deploy และ smoke test |
@@ -54,6 +54,8 @@ Workflow ใช้ runner `ubuntu-24.04`, Node จาก `.nvmrc`, Python จา
 | `SUPABASE_BACKUP_TOKEN` | production เท่านั้น | Supabase Settings → Access Tokens แบบ fine-grained จำกัด Project และ `backups_read` เลือกใช้เมื่อต้องให้ pipeline ตรวจ managed backup หรือ PITR |
 
 Vercel CLI ใช้ token สำหรับรับคำสั่ง deploy จาก GitHub ซึ่งเป็นคนละทิศกับ Vercel OIDC สำหรับให้ build เข้าถึงบริการภายนอก จึงยังใช้ token ที่จำกัด scope และวันหมดอายุ ขณะ deploy แอปอ่าน `SUPABASE_URL` ตาม target ส่วน `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` และ CAPTCHA runtime configuration อยู่ใน Settings → Environment Variables ของ Vercel เฉพาะโปรเจกต์นั้น OAuth client secrets, SMTP credentials และ CAPTCHA secret อยู่ใน Supabase project settings ของ environment
+
+ค่าเริ่มต้น PR ทุกอันถูกตรวจด้วย `npm audit --audit-level=high` เมื่อต้องการตรวจ dependency ที่เพิ่มใน PR ผ่าน GitHub ด้วย ให้เปิด **Settings → Advanced Security → Dependency graph** ก่อน แล้วไปที่ **Settings → Secrets and variables → Actions → Variables** สร้าง repository variable `CHESS_GITHUB_DEPENDENCY_REVIEW=1` และตรวจว่า job `dependency-review` ผ่านก่อนเพิ่มเข้า required checks [คู่มือ GitHub](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/enable-dependency-graph)
 
 ตั้ง Vercel Authentication บน Preview ก่อนเปิด workflow staging ใช้ Vercel project แยกเพื่อให้ใช้ Hobby ได้โดยไม่ต้องใช้ custom environments ใช้ฐาน staging สำหรับข้อมูลจำลอง และใช้ external monitoring เฉพาะบัญชี deploy ที่กำหนด ใช้ GitHub Actions เป็นจุด deploy หลัก ปิด Vercel Git auto-deploy เพื่อให้การ deploy เดินผ่าน approval และการตรวจ backup ของ workflow นี้
 
