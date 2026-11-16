@@ -114,10 +114,12 @@ def journey(page, context):
     expect(page.locator("#account-code")).to_be_visible()
     page.locator("#account-code").fill(await_code(address, "รหัสตั้งรหัสผ่านใหม่"))
     page.locator("#account-submit").click()
+    security_dialog = page.get_by_role("dialog", name="ตั้งค่าบัญชี")
     recovery_form = page.locator("#security-form")
     expect(recovery_form.locator('input[name="password"]')).to_be_visible()
     recovery_form.locator('input[name="password"]').fill(NEW_PASSWORD)
     recovery_form.get_by_role("button", name="ยืนยัน").click()
+    expect(security_dialog).not_to_be_visible()
     expect(page.locator("#account-password")).to_be_visible()
     login(page, address, NEW_PASSWORD)
     expect(page.locator("#account-settings")).to_be_visible()
@@ -142,6 +144,7 @@ def journey(page, context):
     page.get_by_role("button", name="ลบบัญชี", exact=True).click()
     recovery_form.locator('input[name="confirmation"]').fill("DELETE")
     recovery_form.get_by_role("button", name="ยืนยัน").click()
+    expect(security_dialog).not_to_be_visible()
     expect(page.locator("#account-password")).to_be_visible()
     assert session(page)["user"] is None
 

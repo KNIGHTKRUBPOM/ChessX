@@ -11,6 +11,7 @@ const secret = process.env.SUPABASE_SECRET_KEY;
 const aliases = {
   signup: 'รหัสยืนยันบัญชี ChessMess',
   recovery: 'รหัสตั้งรหัสผ่านใหม่ ChessMess',
+  emailChange: 'รหัสยืนยันการเปลี่ยนอีเมล ChessMess',
 };
 const jar = new Map();
 
@@ -94,6 +95,7 @@ async function run() {
   const browserSdk = sdk(publishable);
   const id = randomUUID();
   const email = 'chessx-qa-' + id + '@example.test';
+  const nextEmail = 'chessx-next-' + id + '@example.test';
   let password = 'Local-QA-' + id;
   let userId;
   try {
@@ -109,6 +111,11 @@ async function run() {
     verify(!user.error && user.data.user?.id === userId, 'Official Supabase SDK did not sign in');
     const profile = await browserSdk.from('profiles').select('id,display_name').eq('id', userId).single();
     verify(!profile.error && profile.data?.display_name === 'Local QA', 'Profile trigger or own RLS read failed');
+    const changes = { username: 'qa_' + id.slice(0, 8), displayName: 'แก้ไขโปรไฟล์ QA' };
+    await account('Edit own profile', '/profile', { body: changes, status: 204 });
+    const updated = await browserSdk.from('profiles').select('username,display_name').eq('id', userId).single();
+    verify(!updated.error && updated.data?.username === changes.username &&
+      updated.data?.display_name === changes.displayName, 'BFF profile update did not persist in Postgres');
     await browserSdk.auth.signOut({ scope: 'local' });
 
     jar.delete('chessmess_access');
@@ -138,8 +145,26 @@ async function run() {
     verify(security.aal === 'aal2' && security.factors.some(item =>
       item.id === enrollment.factorId && item.status === 'verified'), 'Verified TOTP factor missing');
 
+    await account('Request email change', '/email', { body: { email: nextEmail }, status: 202 });
+    const [oldCode, newCode] = await Promise.all([
+      otp(email, aliases.emailChange),
+      otp(nextEmail, aliases.emailChange),
+    ]);
+    const firstConfirmation = await account('Confirm current email', '/email/confirm', {
+      body: { email, code: oldCode },
+    });
+    verify(firstConfirmation.completed === false && (await account('Pending email status')).user?.email === email,
+      'Email changed before both addresses were confirmed');
+    const complete = await account('Confirm new email', '/email/confirm', {
+      body: { email: nextEmail, code: newCode },
+    });
+    const changed = await account('Changed email status');
+    verify(complete.completed === true && changed.user?.id === userId && changed.user.email === nextEmail,
+      'Both OTP confirmations did not update the same account email');
+
     const exported = await account('Export own data', '/export');
-    verify(exported.account?.id === userId && exported.profiles.some(item => item.id === userId),
+    verify(exported.account?.id === userId && exported.account.email === nextEmail &&
+      exported.profiles.some(item => item.id === userId && item.display_name === changes.displayName),
       'Export did not contain own profile');
     await account('Delete synthetic account', '/delete', { body: { confirmation: 'DELETE' }, status: 204 });
     const remaining = await admin.auth.admin.getUserById(userId);
@@ -150,7 +175,7 @@ async function run() {
       await admin.auth.admin.deleteUser(userId).catch(() => undefined);
     }
   }
-  console.log('PASS Local Supabase signup, OTP, SDK RLS, refresh/logout, recovery, TOTP, export/delete');
+  console.log('PASS Local Supabase signup, OTP, SDK RLS, profile edit, refresh/logout, recovery, TOTP, dual email change, export/delete');
 }
 
 await run().catch(error => {
